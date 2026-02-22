@@ -16,10 +16,10 @@ pip install -e .
 python run.py
 
 # Run with multiple models
-python run.py --models openai,anthropic
+python run.py --models openai,anthropic,google,deepseek
 
 # Full options (judge uses OpenRouter model ID format)
-python run.py --models openai,anthropic --tasks benchmarks/text_generation.json --output results/output.json --judge openai/gpt-4o-mini
+python run.py --models openai,anthropic,google,deepseek --tasks benchmarks/text_generation.json --output results/output.json --judge openai/gpt-4.1-mini
 ```
 
 There is no test suite or linter configured yet.
@@ -30,7 +30,7 @@ The pipeline flows: **load tasks → initialize models → generate outputs → 
 
 - `run.py` — CLI entry point, parses args and calls `runner.run_benchmark()`
 - `agentbench/runner.py` — Orchestrates the full pipeline: load → generate → evaluate → report
-- `agentbench/config.py` — `MODEL_REGISTRY` dict maps short names ("openai", "anthropic") to `OpenRouterModel`; `get_model()` factory instantiates them with `OPENROUTER_API_KEY` from `.env`
+- `agentbench/config.py` — `MODEL_REGISTRY` dict maps short names ("openai", "anthropic", "google", "deepseek") to `OpenRouterModel`; `get_model()` factory instantiates them with `OPENROUTER_API_KEY` from `.env`
 - `agentbench/models/base.py` — `BaseModel` ABC with `generate(prompt) -> str` and `name` property
 - `agentbench/models/openrouter_model.py` — OpenRouter adapter; routes all models through OpenRouter's OpenAI-compatible API
 - `agentbench/models/openai_model.py` — Legacy OpenAI direct adapter (kept for reference)

@@ -11,14 +11,18 @@ load_dotenv()
 
 # Default model IDs used when routing through OpenRouter
 OPENROUTER_MODEL_IDS: dict[str, str] = {
-    "openai": "openai/gpt-4o-mini",
-    "anthropic": "anthropic/claude-sonnet-4-20250514",
+    "openai": "openai/gpt-4.1-mini",
+    "anthropic": "anthropic/claude-sonnet-4.6",
+    "google": "google/gemini-2.5-flash",
+    "deepseek": "deepseek/deepseek-v3.2",
 }
 
 # Model registry: short name -> factory class
 MODEL_REGISTRY: dict[str, type[BaseModel]] = {
     "openai": OpenRouterModel,
     "anthropic": OpenRouterModel,
+    "google": OpenRouterModel,
+    "deepseek": OpenRouterModel,
 }
 
 
@@ -28,7 +32,7 @@ def get_model(name: str) -> BaseModel:
     All models are routed through OpenRouter using a single OPENROUTER_API_KEY.
 
     Args:
-        name: One of 'openai', 'anthropic'.
+        name: One of 'openai', 'anthropic', 'google', 'deepseek'.
 
     Returns:
         A configured model instance.

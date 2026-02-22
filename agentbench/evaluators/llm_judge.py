@@ -35,7 +35,7 @@ Please evaluate the output above. Respond with JSON only.\
 class LLMJudge(BaseEvaluator):
     """Uses an LLM to judge model outputs."""
 
-    def __init__(self, model_id: str = "openai/gpt-4o-mini", api_key: str | None = None):
+    def __init__(self, model_id: str = "openai/gpt-4.1-mini", api_key: str | None = None):
         self.model_id = model_id
         self._client = openai.OpenAI(
             base_url=OPENROUTER_BASE_URL,
