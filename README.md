@@ -21,8 +21,7 @@ agentbench/
 ├── runner.py              # 评测主运行器
 ├── models/                # 模型适配器
 │   ├── base.py            # 模型抽象基类
-│   ├── openai_model.py    # OpenAI (GPT) 适配器
-│   └── anthropic_model.py # Anthropic (Claude) 适配器
+│   └── openrouter_model.py # OpenRouter 统一 API 适配器
 ├── tasks/                 # 任务管理
 │   ├── base.py            # Task 数据结构
 │   └── loader.py          # JSON 任务加载器
@@ -59,8 +58,7 @@ cp .env.example .env
 编辑 `.env` 文件：
 
 ```
-OPENAI_API_KEY=sk-your-openai-api-key
-ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key
+OPENROUTER_API_KEY=sk-or-your-openrouter-api-key
 ```
 
 ### 运行评测
@@ -76,22 +74,22 @@ python run.py --models openai,anthropic
 python run.py --models openai,anthropic --tasks benchmarks/text_generation.json --output results/output.json
 
 # 指定 LLM 评审模型
-python run.py --models openai --judge gpt-4o-mini
+python run.py --models openai --judge openai/gpt-5.2
 ```
 
 ### CLI 参数
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `--models` | `openai` | 逗号分隔的模型名称，可选：`openai`、`anthropic` |
+| `--models` | `openai` | 逗号分隔的模型名称，可选：`openai`、`anthropic`、`google`、`deepseek` |
 | `--tasks` | `benchmarks/text_generation.json` | 基准测试 JSON 文件路径 |
 | `--output` | `results/output.json` | 结果输出 JSON 文件路径 |
-| `--judge` | `gpt-4o-mini` | LLM 评审使用的模型 ID |
+| `--judge` | `openai/gpt-5.2` | LLM 评审使用的模型 ID |
 
 ## 工作原理
 
 1. 从 JSON 文件加载评测任务
-2. 初始化 LLM 评审模型（默认使用 GPT-4o-mini）
+2. 初始化 LLM 评审模型（默认使用 GPT-5.2）
 3. 初始化被评测的模型（OpenAI / Anthropic）
 4. 对每个模型、每个任务：
    - 模型根据 prompt 生成输出
@@ -100,10 +98,12 @@ python run.py --models openai --judge gpt-4o-mini
 
 ## 支持的模型
 
-| 名称 | 模型 | 说明 |
-|------|------|------|
-| `openai` | gpt-4o-mini | OpenAI Chat Completion API |
-| `anthropic` | claude-sonnet-4-20250514 | Anthropic Messages API |
+| 名称 | 模型 ID | 说明 |
+|------|---------|------|
+| `openai` | openai/gpt-5.2 | 通过 OpenRouter 调用 |
+| `anthropic` | anthropic/claude-sonnet-4.6 | 通过 OpenRouter 调用 |
+| `google` | google/gemini-2.5-flash | 通过 OpenRouter 调用 |
+| `deepseek` | deepseek/deepseek-v3.2 | 通过 OpenRouter 调用 |
 
 ## 基准测试集
 
@@ -157,8 +157,10 @@ class MyModel(BaseModel):
 
 ```python
 MODEL_REGISTRY = {
-    "openai": OpenAIModel,
-    "anthropic": AnthropicModel,
+    "openai": OpenRouterModel,
+    "anthropic": OpenRouterModel,
+    "google": OpenRouterModel,
+    "deepseek": OpenRouterModel,
     "my-model": MyModel,
 }
 ```
@@ -166,8 +168,7 @@ MODEL_REGISTRY = {
 ## 技术栈
 
 - **Python 3.10+**
-- **OpenAI SDK** (`openai>=1.0`) — GPT 模型调用
-- **Anthropic SDK** (`anthropic>=0.20`) — Claude 模型调用
+- **OpenAI SDK** (`openai>=1.0`) — OpenRouter API 调用（兼容 OpenAI 格式）
 - **python-dotenv** (`python-dotenv>=1.0`) — 环境变量管理
 
 ## 许可证

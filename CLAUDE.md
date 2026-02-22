@@ -19,7 +19,7 @@ python run.py
 python run.py --models openai,anthropic,google,deepseek
 
 # Full options (judge uses OpenRouter model ID format)
-python run.py --models openai,anthropic,google,deepseek --tasks benchmarks/text_generation.json --output results/output.json --judge openai/gpt-4.1-mini
+python run.py --models openai,anthropic,google,deepseek --tasks benchmarks/text_generation.json --output results/output.json --judge openai/gpt-5.2
 ```
 
 There is no test suite or linter configured yet.
