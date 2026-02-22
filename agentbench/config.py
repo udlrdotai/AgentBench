@@ -13,7 +13,7 @@ load_dotenv()
 OPENROUTER_MODEL_IDS: dict[str, str] = {
     "openai": "openai/gpt-5.2",
     "anthropic": "anthropic/claude-sonnet-4.6",
-    "google": "google/gemini-2.5-flash",
+    "google": "google/gemini-3.1-pro-preview",
     "deepseek": "deepseek/deepseek-v3.2",
 }
 

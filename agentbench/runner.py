@@ -66,9 +66,10 @@ def run_benchmark(
             print("judging...", end=" ", flush=True)
             try:
                 result = judge.evaluate(task, output)
+                result.model_output = output
             except Exception as e:
                 print(f"ERROR: {e}")
-                result = EvalResult(task_id=task.id, score=0, comment=f"Evaluation failed: {e}")
+                result = EvalResult(task_id=task.id, score=0, comment=f"Evaluation failed: {e}", model_output=output)
 
             model_results.append(result)
             print(f"score={result.score}")
