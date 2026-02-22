@@ -94,7 +94,7 @@ jobs:
           ${ISSUE_COMMENTS}"
 
           echo "=== Invoking Claude Agent ==="
-          claude -p --dangerously-skip-permissions "$PROMPT"
+          echo "$PROMPT" | claude --dangerously-skip-permissions --verbose
 
       - name: Commit and push changes
         id: commit
