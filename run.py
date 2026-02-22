@@ -28,8 +28,8 @@ def main():
     parser.add_argument(
         "--judge",
         type=str,
-        default="openai/gpt-4o-mini",
-        help="Model ID for the LLM judge (OpenRouter format, e.g. openai/gpt-4o-mini)",
+        default="openai/gpt-4.1-mini",
+        help="Model ID for the LLM judge (OpenRouter format, e.g. openai/gpt-4.1-mini)",
     )
 
     args = parser.parse_args()
