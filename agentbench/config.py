@@ -4,21 +4,28 @@ import os
 
 from dotenv import load_dotenv
 
-from agentbench.models.anthropic_model import AnthropicModel
 from agentbench.models.base import BaseModel
-from agentbench.models.openai_model import OpenAIModel
+from agentbench.models.openrouter_model import OpenRouterModel
 
 load_dotenv()
 
-# Model registry: short name -> factory function
+# Default model IDs used when routing through OpenRouter
+OPENROUTER_MODEL_IDS: dict[str, str] = {
+    "openai": "openai/gpt-4o-mini",
+    "anthropic": "anthropic/claude-sonnet-4-20250514",
+}
+
+# Model registry: short name -> factory class
 MODEL_REGISTRY: dict[str, type[BaseModel]] = {
-    "openai": OpenAIModel,
-    "anthropic": AnthropicModel,
+    "openai": OpenRouterModel,
+    "anthropic": OpenRouterModel,
 }
 
 
 def get_model(name: str) -> BaseModel:
     """Create a model instance by short name.
+
+    All models are routed through OpenRouter using a single OPENROUTER_API_KEY.
 
     Args:
         name: One of 'openai', 'anthropic'.
@@ -30,18 +37,11 @@ def get_model(name: str) -> BaseModel:
     if name not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model: {name!r}. Available: {list(MODEL_REGISTRY)}")
 
-    model_cls = MODEL_REGISTRY[name]
-
-    if name == "openai":
-        api_key = os.getenv("OPENAI_API_KEY")
-        return model_cls(api_key=api_key)
-    elif name == "anthropic":
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        return model_cls(api_key=api_key)
-
-    return model_cls()
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    model_id = OPENROUTER_MODEL_IDS[name]
+    return OpenRouterModel(model_id=model_id, api_key=api_key)
 
 
 def get_judge_api_key() -> str | None:
-    """Get the API key for the judge model (defaults to OpenAI)."""
-    return os.getenv("OPENAI_API_KEY")
+    """Get the API key for the judge model (OpenRouter)."""
+    return os.getenv("OPENROUTER_API_KEY")

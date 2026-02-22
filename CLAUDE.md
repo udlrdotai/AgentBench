@@ -12,14 +12,14 @@ AgentBench is an AI Agent evaluation platform for "super-individuals" (独立开
 # Install (editable/dev mode)
 pip install -e .
 
-# Run evaluation (default: OpenAI model)
+# Run evaluation (default: OpenAI model via OpenRouter)
 python run.py
 
 # Run with multiple models
 python run.py --models openai,anthropic
 
-# Full options
-python run.py --models openai,anthropic --tasks benchmarks/text_generation.json --output results/output.json --judge gpt-4o-mini
+# Full options (judge uses OpenRouter model ID format)
+python run.py --models openai,anthropic --tasks benchmarks/text_generation.json --output results/output.json --judge openai/gpt-4o-mini
 ```
 
 There is no test suite or linter configured yet.
@@ -30,13 +30,14 @@ The pipeline flows: **load tasks → initialize models → generate outputs → 
 
 - `run.py` — CLI entry point, parses args and calls `runner.run_benchmark()`
 - `agentbench/runner.py` — Orchestrates the full pipeline: load → generate → evaluate → report
-- `agentbench/config.py` — `MODEL_REGISTRY` dict maps short names ("openai", "anthropic") to model classes; `get_model()` factory instantiates them with API keys from `.env`
+- `agentbench/config.py` — `MODEL_REGISTRY` dict maps short names ("openai", "anthropic") to `OpenRouterModel`; `get_model()` factory instantiates them with `OPENROUTER_API_KEY` from `.env`
 - `agentbench/models/base.py` — `BaseModel` ABC with `generate(prompt) -> str` and `name` property
-- `agentbench/models/openai_model.py` — OpenAI adapter (gpt-4o-mini, temperature=0.7)
-- `agentbench/models/anthropic_model.py` — Anthropic adapter (claude-sonnet-4-20250514, max_tokens=4096)
+- `agentbench/models/openrouter_model.py` — OpenRouter adapter; routes all models through OpenRouter's OpenAI-compatible API
+- `agentbench/models/openai_model.py` — Legacy OpenAI direct adapter (kept for reference)
+- `agentbench/models/anthropic_model.py` — Legacy Anthropic direct adapter (kept for reference)
 - `agentbench/tasks/base.py` — `Task` dataclass (id, domain, capability, prompt, criteria)
 - `agentbench/tasks/loader.py` — Loads tasks from JSON files
-- `agentbench/evaluators/llm_judge.py` — LLM-as-Judge using OpenAI; scores 1-10, temperature=0.0
+- `agentbench/evaluators/llm_judge.py` — LLM-as-Judge via OpenRouter; scores 1-10, temperature=0.0
 - `agentbench/results/reporter.py` — Terminal table output + JSON export with timestamp
 
 ## Adding a New Model
@@ -59,6 +60,6 @@ Benchmark tasks are in `benchmarks/*.json`:
 ## Key Conventions
 
 - Python 3.10+ with type hints (`|` union syntax, dataclasses)
-- API keys managed via `.env` file (loaded by `python-dotenv`); never commit `.env`
+- API keys managed via `.env` file (loaded by `python-dotenv`); uses `OPENROUTER_API_KEY`; never commit `.env`
 - Git commit messages use conventional prefixes: `feat:`, `fix:`, `docs:`
 - Automated workflow: GitHub Issues with `run-on:<runner>` label trigger Claude agent via `.github/workflows/agent-issue-runner.yml`, which creates a branch `agent/issue-N`, commits, pushes, and opens a PR
