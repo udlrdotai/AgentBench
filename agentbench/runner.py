@@ -15,7 +15,7 @@ def run_benchmark(
     model_names: list[str],
     tasks_path: str,
     output_path: str = "results/output.json",
-    judge_model: str = "gpt-4o-mini",
+    judge_model: str = "openai/gpt-4o-mini",
 ) -> dict[str, list[EvalResult]]:
     """Run the full evaluation pipeline.
 

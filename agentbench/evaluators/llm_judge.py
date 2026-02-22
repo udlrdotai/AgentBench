@@ -1,10 +1,11 @@
-"""LLM-as-Judge evaluator."""
+"""LLM-as-Judge evaluator — routes through OpenRouter."""
 
 import json
 import re
 
 import openai
 
+from agentbench.models.openrouter_model import OPENROUTER_BASE_URL
 from agentbench.tasks.base import Task
 
 from .base import BaseEvaluator, EvalResult
@@ -34,9 +35,12 @@ Please evaluate the output above. Respond with JSON only.\
 class LLMJudge(BaseEvaluator):
     """Uses an LLM to judge model outputs."""
 
-    def __init__(self, model_id: str = "gpt-4o-mini", api_key: str | None = None):
+    def __init__(self, model_id: str = "openai/gpt-4o-mini", api_key: str | None = None):
         self.model_id = model_id
-        self._client = openai.OpenAI(api_key=api_key)
+        self._client = openai.OpenAI(
+            base_url=OPENROUTER_BASE_URL,
+            api_key=api_key,
+        )
 
     def evaluate(self, task: Task, model_output: str) -> EvalResult:
         user_message = JUDGE_USER_TEMPLATE.format(
