@@ -1,4 +1,4 @@
-name: Runner Environment Info
+name: Self-Hosted Runner Trigger
 
 on:
   issues:
@@ -8,8 +8,8 @@ permissions:
   issues: write
 
 jobs:
-  # Job 1: Extract runner label from the issue label
-  extract-runner:
+  # Job 1: Parse the run-on label
+  setup:
     runs-on: ubuntu-latest
     if: startsWith(github.event.label.name, 'run-on:')
     outputs:
@@ -24,195 +24,61 @@ jobs:
             echo "::error::Label 'run-on:' has no runner target specified."
             exit 1
           fi
-          echo "Extracted runner label: $RUNNER_LABEL"
           echo "runner_label=$RUNNER_LABEL" >> "$GITHUB_OUTPUT"
 
-      - name: Post starting comment on issue
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const runnerLabel = '${{ steps.parse.outputs.runner_label }}';
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `🏃 **Runner Environment Info** workflow triggered.\n\nTarget runner: \`${runnerLabel}\`\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            });
-
-  # Job 2: Run on the target self-hosted runner and collect env info
-  print-env-info:
-    needs: extract-runner
-    runs-on: ${{ needs.extract-runner.outputs.runner_label }}
+  # Job 2: Run on self-hosted runner
+  run:
+    needs: setup
+    runs-on: ${{ needs.setup.outputs.runner_label }}
     timeout-minutes: 10
     steps:
-      - name: System overview
+      - name: Claude tool version
         run: |
           echo "============================================"
-          echo "  SYSTEM OVERVIEW"
+          echo "  CLAUDE TOOL VERSION"
           echo "============================================"
-          echo "Hostname:    $(hostname)"
-          echo "Date/Time:   $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo "Uptime:      $(uptime)"
-
-      - name: Operating system info
-        run: |
-          echo "============================================"
-          echo "  OPERATING SYSTEM"
-          echo "============================================"
-          uname -a
-          echo ""
-          if [ -f /etc/os-release ]; then
-            cat /etc/os-release
-          elif command -v sw_vers &>/dev/null; then
-            sw_vers
-          fi
-
-      - name: CPU information
-        run: |
-          echo "============================================"
-          echo "  CPU"
-          echo "============================================"
-          echo "Architecture: $(uname -m)"
-          if [ -f /proc/cpuinfo ]; then
-            echo "Model:    $(grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2 | xargs)"
-            echo "Cores:    $(grep -c '^processor' /proc/cpuinfo)"
-            echo "Threads:  $(nproc 2>/dev/null || echo 'N/A')"
-          elif command -v sysctl &>/dev/null; then
-            sysctl -n machdep.cpu.brand_string 2>/dev/null || true
-            echo "Cores: $(sysctl -n hw.ncpu 2>/dev/null || echo 'N/A')"
-          fi
-
-      - name: Memory information
-        run: |
-          echo "============================================"
-          echo "  MEMORY"
-          echo "============================================"
-          if command -v free &>/dev/null; then
-            free -h
-          elif command -v sysctl &>/dev/null; then
-            echo "Total RAM: $(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1073741824 )) GB"
-          fi
-
-      - name: Disk information
-        run: |
-          echo "============================================"
-          echo "  DISK"
-          echo "============================================"
-          df -h 2>/dev/null | grep -v 'tmpfs\|udev\|snap' || df -h
-          echo ""
-          lsblk 2>/dev/null || diskutil list 2>/dev/null || echo "N/A"
-
-      - name: Network information
-        run: |
-          echo "============================================"
-          echo "  NETWORK"
-          echo "============================================"
-          echo "--- IP addresses ---"
-          if command -v ip &>/dev/null; then
-            ip -4 addr show | grep inet | awk '{print $NF, $2}'
-          elif command -v ifconfig &>/dev/null; then
-            ifconfig | grep 'inet ' | awk '{print $2}'
-          fi
-          echo ""
-          echo "--- DNS resolvers ---"
-          cat /etc/resolv.conf 2>/dev/null | grep nameserver || echo "N/A"
-          echo ""
-          echo "--- Public IP ---"
-          curl -s --max-time 5 https://ifconfig.me 2>/dev/null || echo "Could not determine"
-
-      - name: GPU information
-        run: |
-          echo "============================================"
-          echo "  GPU"
-          echo "============================================"
-          if command -v nvidia-smi &>/dev/null; then
-            nvidia-smi
-          elif command -v rocm-smi &>/dev/null; then
-            rocm-smi
+          if command -v claude &>/dev/null; then
+            claude --version
           else
-            echo "No GPU tools detected (nvidia-smi / rocm-smi not found)"
+            echo "claude CLI not found in PATH"
+            echo "PATH: $PATH"
           fi
 
-      - name: Installed languages and runtimes
+      - name: Print issue content
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
         run: |
           echo "============================================"
-          echo "  LANGUAGES & RUNTIMES"
+          echo "  ISSUE CONTENT"
           echo "============================================"
-          for cmd in python3 python pip3 node npm java go rustc cargo ruby gcc g++ make cmake; do
-            if command -v "$cmd" &>/dev/null; then
-              printf "%-12s %s\n" "$cmd:" "$($cmd --version 2>&1 | head -1)"
-            fi
-          done
-
-      - name: Installed tools
-        run: |
-          echo "============================================"
-          echo "  TOOLS"
-          echo "============================================"
-          for cmd in git docker docker-compose podman kubectl helm terraform ansible curl wget jq htop tmux vim nvim; do
-            if command -v "$cmd" &>/dev/null; then
-              printf "%-18s %s\n" "$cmd:" "$($cmd --version 2>&1 | head -1)"
-            fi
-          done
-
-      - name: Container / virtualization info
-        run: |
-          echo "============================================"
-          echo "  CONTAINER / VIRTUALIZATION"
-          echo "============================================"
-          if [ -f /.dockerenv ]; then
-            echo "Running inside Docker container"
-          elif grep -q 'docker\|lxc\|kubepods' /proc/1/cgroup 2>/dev/null; then
-            echo "Running inside container (detected via cgroup)"
-          else
-            echo "Not running inside a container (bare metal or VM)"
-          fi
-          systemd-detect-virt 2>/dev/null || echo "systemd-detect-virt not available"
-
-      - name: GitHub Actions runner info
-        run: |
-          echo "============================================"
-          echo "  GITHUB ACTIONS RUNNER"
-          echo "============================================"
-          echo "Runner Name:   ${{ runner.name }}"
-          echo "Runner OS:     ${{ runner.os }}"
-          echo "Runner Arch:   ${{ runner.arch }}"
-          echo "Runner Temp:   ${{ runner.temp }}"
-          echo "Workspace:     ${{ github.workspace }}"
+          echo "Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+          echo "URL: ${ISSUE_URL}"
           echo ""
-          echo "--- RUNNER_* vars ---"
-          env | grep '^RUNNER_' | sort
-          echo ""
-          echo "--- GITHUB_* vars ---"
-          env | grep '^GITHUB_' | sort
-
-      - name: Python environment details
-        run: |
-          echo "============================================"
-          echo "  PYTHON ENVIRONMENT"
-          echo "============================================"
-          if command -v python3 &>/dev/null; then
-            echo "Python: $(python3 --version)"
-            echo "Path:   $(which python3)"
-            echo ""
-            python3 -m pip list 2>/dev/null | head -50 || echo "pip not available"
-            echo ""
-            echo "VIRTUAL_ENV=${VIRTUAL_ENV:-not set}"
-            echo "CONDA_DEFAULT_ENV=${CONDA_DEFAULT_ENV:-not set}"
+          echo "--- Body ---"
+          if [ -n "$ISSUE_BODY" ]; then
+            echo "$ISSUE_BODY"
           else
-            echo "Python3 not found"
+            echo "(empty)"
           fi
 
-      - name: Post results comment on issue
-        if: always()
+  # Job 3: Post result comment (on GitHub-hosted to avoid self-hosted network issues)
+  notify:
+    needs: [setup, run]
+    runs-on: ubuntu-latest
+    if: always() && needs.setup.result == 'success'
+    steps:
+      - name: Post result comment
         uses: actions/github-script@v7
         with:
           script: |
-            const status = '${{ job.status }}';
+            const status = '${{ needs.run.result }}';
             const emoji = status === 'success' ? '✅' : '❌';
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `${emoji} **Runner Environment Info** completed with status: **${status}**\n\nFull logs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+              body: `${emoji} Runner job completed: **${status}**\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             });
