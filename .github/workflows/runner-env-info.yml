@@ -8,12 +8,13 @@ permissions:
   issues: write
 
 jobs:
-  # Job 1: Parse the run-on label
+  # Job 1: Parse the run-on label and fetch issue comments
   setup:
     runs-on: ubuntu-latest
     if: startsWith(github.event.label.name, 'run-on:')
     outputs:
       runner_label: ${{ steps.parse.outputs.runner_label }}
+      issue_comments: ${{ steps.comments.outputs.comments }}
     steps:
       - name: Parse runner label
         id: parse
@@ -25,6 +26,21 @@ jobs:
             exit 1
           fi
           echo "runner_label=$RUNNER_LABEL" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch issue comments
+        id: comments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const formatted = comments.length === 0
+              ? '(no comments)'
+              : comments.map(c => `[${c.user.login}] ${c.created_at}\n${c.body}`).join('\n\n');
+            core.setOutput('comments', formatted);
 
   # Job 2: Run on self-hosted runner
   run:
@@ -53,7 +69,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
           ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ', ') }}
-          GH_TOKEN: ${{ github.token }}
+          ISSUE_COMMENTS: ${{ needs.setup.outputs.issue_comments }}
         run: |
           echo "============================================"
           echo "  ISSUE #${ISSUE_NUMBER}"
@@ -70,19 +86,7 @@ jobs:
           fi
           echo ""
           echo "--- Comments ---"
-          curl -s -H "Authorization: token ${GH_TOKEN}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments" \
-            | python3 -c "
-import sys, json
-comments = json.load(sys.stdin)
-if not comments:
-    print('(no comments)')
-else:
-    for c in comments:
-        print(f\"[{c['user']['login']}] {c['created_at']}\")
-        print(c['body'])
-        print()
-" 2>/dev/null || echo "(failed to fetch comments)"
+          echo "$ISSUE_COMMENTS"
 
   # Job 3: Post result comment (on GitHub-hosted to avoid self-hosted network issues)
   notify:
