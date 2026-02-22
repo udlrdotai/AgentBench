@@ -32,15 +32,17 @@ jobs:
     runs-on: ${{ needs.setup.outputs.runner_label }}
     timeout-minutes: 10
     steps:
-      - name: Claude tool version
+      - name: Tool version check
+        env:
+          TOOL_NAME: ${{ needs.setup.outputs.runner_label }}
         run: |
           echo "============================================"
-          echo "  CLAUDE TOOL VERSION"
+          echo "  TOOL VERSION: ${TOOL_NAME}"
           echo "============================================"
-          if command -v claude &>/dev/null; then
-            claude --version
+          if command -v "$TOOL_NAME" &>/dev/null; then
+            "$TOOL_NAME" --version 2>&1 || "$TOOL_NAME" version 2>&1 || echo "Installed but --version not supported"
           else
-            echo "claude CLI not found in PATH"
+            echo "${TOOL_NAME} not found in PATH"
             echo "PATH: $PATH"
           fi
 
@@ -50,12 +52,15 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ', ') }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           echo "============================================"
-          echo "  ISSUE CONTENT"
+          echo "  ISSUE #${ISSUE_NUMBER}"
           echo "============================================"
-          echo "Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
-          echo "URL: ${ISSUE_URL}"
+          echo "Title:  ${ISSUE_TITLE}"
+          echo "URL:    ${ISSUE_URL}"
+          echo "Labels: ${ISSUE_LABELS}"
           echo ""
           echo "--- Body ---"
           if [ -n "$ISSUE_BODY" ]; then
@@ -63,6 +68,21 @@ jobs:
           else
             echo "(empty)"
           fi
+          echo ""
+          echo "--- Comments ---"
+          curl -s -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}/comments" \
+            | python3 -c "
+import sys, json
+comments = json.load(sys.stdin)
+if not comments:
+    print('(no comments)')
+else:
+    for c in comments:
+        print(f\"[{c['user']['login']}] {c['created_at']}\")
+        print(c['body'])
+        print()
+" 2>/dev/null || echo "(failed to fetch comments)"
 
   # Job 3: Post result comment (on GitHub-hosted to avoid self-hosted network issues)
   notify:
