@@ -76,7 +76,7 @@ python run.py --models openai,anthropic
 python run.py --models openai,anthropic --tasks benchmarks/text_generation.json --output results/output.json
 
 # 指定 LLM 评审模型
-python run.py --models openai --judge gpt-4o-mini
+python run.py --models openai --judge openai/gpt-5.2
 ```
 
 ### CLI 参数
@@ -86,12 +86,12 @@ python run.py --models openai --judge gpt-4o-mini
 | `--models` | `openai` | 逗号分隔的模型名称，可选：`openai`、`anthropic` |
 | `--tasks` | `benchmarks/text_generation.json` | 基准测试 JSON 文件路径 |
 | `--output` | `results/output.json` | 结果输出 JSON 文件路径 |
-| `--judge` | `gpt-4o-mini` | LLM 评审使用的模型 ID |
+| `--judge` | `openai/gpt-5.2` | LLM 评审使用的模型 ID |
 
 ## 工作原理
 
 1. 从 JSON 文件加载评测任务
-2. 初始化 LLM 评审模型（默认使用 GPT-4o-mini）
+2. 初始化 LLM 评审模型（默认使用 GPT-5.2）
 3. 初始化被评测的模型（OpenAI / Anthropic）
 4. 对每个模型、每个任务：
    - 模型根据 prompt 生成输出
@@ -102,7 +102,7 @@ python run.py --models openai --judge gpt-4o-mini
 
 | 名称 | 模型 | 说明 |
 |------|------|------|
-| `openai` | gpt-4o-mini | OpenAI Chat Completion API |
+| `openai` | gpt-5.2 | OpenAI Chat Completion API |
 | `anthropic` | claude-sonnet-4-20250514 | Anthropic Messages API |
 
 ## 基准测试集

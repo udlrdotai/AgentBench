@@ -11,7 +11,7 @@ load_dotenv()
 
 # Default model IDs used when routing through OpenRouter
 OPENROUTER_MODEL_IDS: dict[str, str] = {
-    "openai": "openai/gpt-4.1-mini",
+    "openai": "openai/gpt-5.2",
     "anthropic": "anthropic/claude-sonnet-4.6",
     "google": "google/gemini-2.5-flash",
     "deepseek": "deepseek/deepseek-v3.2",

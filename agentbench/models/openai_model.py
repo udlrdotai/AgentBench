@@ -8,7 +8,7 @@ from .base import BaseModel
 class OpenAIModel(BaseModel):
     """Adapter for OpenAI chat completion models."""
 
-    def __init__(self, model_id: str = "gpt-4o-mini", api_key: str | None = None):
+    def __init__(self, model_id: str = "gpt-5.2", api_key: str | None = None):
         super().__init__(model_id)
         self._client = openai.OpenAI(api_key=api_key)
 
