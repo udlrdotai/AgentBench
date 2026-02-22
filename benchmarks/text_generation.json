@@ -1,0 +1,48 @@
+{
+  "name": "text_generation",
+  "description": "文本生成能力评测 —— 覆盖代码开发、自媒体、期权投资、个体健康四大领域",
+  "tasks": [
+    {
+      "id": "code-doc-1",
+      "domain": "代码开发",
+      "capability": "文本生成",
+      "prompt": "请为以下 Python 函数编写一份清晰的 API 文档，包括函数说明、参数说明、返回值说明和使用示例：\n\ndef retry(func, max_attempts=3, delay=1.0, backoff=2.0, exceptions=(Exception,)):\n    \"\"\"重试装饰器\"\"\"\n    import time\n    from functools import wraps\n    @wraps(func)\n    def wrapper(*args, **kwargs):\n        current_delay = delay\n        for attempt in range(1, max_attempts + 1):\n            try:\n                return func(*args, **kwargs)\n            except exceptions as e:\n                if attempt == max_attempts:\n                    raise\n                time.sleep(current_delay)\n                current_delay *= backoff\n    return wrapper",
+      "criteria": "1. 函数说明准确描述了重试装饰器的用途和行为\n2. 每个参数都有类型标注和清晰的说明\n3. 返回值说明完整\n4. 使用示例正确且有实际意义\n5. 文档格式规范（使用标准的 docstring 格式）\n6. 语言简洁专业"
+    },
+    {
+      "id": "code-doc-2",
+      "domain": "代码开发",
+      "capability": "文本生成",
+      "prompt": "请写一份简要的技术方案文档：在一个 Flask Web 应用中添加基于 Redis 的接口限流功能（Rate Limiting），需包含：方案概述、核心实现思路、关键代码片段、注意事项。",
+      "criteria": "1. 方案概述清晰说明了限流的目的和方法\n2. 实现思路合理（如令牌桶或滑动窗口算法）\n3. 代码片段可运行且与方案一致\n4. 涵盖了关键注意事项（如分布式场景、Key设计、异常处理）\n5. 文档结构清晰、层次分明"
+    },
+    {
+      "id": "media-post-1",
+      "domain": "自媒体",
+      "capability": "文本生成",
+      "prompt": "请以「AI 正在重塑个人生产力」为主题，撰写一篇适合在微信公众号发布的短文（800字左右）。目标读者是对 AI 工具感兴趣的职场人士。要求：标题吸引人、开头有 hook、论点清晰、结尾有行动号召。",
+      "criteria": "1. 标题具有吸引力和点击欲望\n2. 开头有效吸引读者（数据/故事/问题等 hook）\n3. 论点清晰，有具体的 AI 工具或场景举例\n4. 语言风格适合公众号读者（专业但不晦涩）\n5. 结尾有明确的行动号召\n6. 字数在 700-900 字之间\n7. 段落分明，适合手机阅读"
+    },
+    {
+      "id": "options-report-1",
+      "domain": "期权投资",
+      "capability": "文本生成",
+      "prompt": "假设当前 AAPL 股价为 $185，隐含波动率 25%，30天到期。请撰写一份简要的期权策略分析报告，比较以下两种策略的风险收益：\n1. 买入 $190 看涨期权（Call）\n2. 卖出 $180/$175 看跌价差（Bull Put Spread）\n\n要求包括：策略描述、最大盈亏分析、适用场景、风险提示。",
+      "criteria": "1. 策略描述准确，术语使用正确\n2. 最大盈亏计算逻辑正确\n3. 对比分析有实质内容（不是泛泛而谈）\n4. 适用场景判断合理\n5. 风险提示具体且有针对性\n6. 报告结构清晰专业"
+    },
+    {
+      "id": "health-plan-1",
+      "domain": "个体健康",
+      "capability": "文本生成",
+      "prompt": "用户信息：30岁男性，久坐办公（每天8小时以上），BMI 26（轻度超重），无运动习惯，目标是减脂增肌。请制定一份为期4周的入门级运动计划，包括：每周训练安排、具体动作说明、渐进式强度提升策略、注意事项。",
+      "criteria": "1. 计划适合零基础人群，循序渐进\n2. 每周训练安排合理（频率、时长、休息日）\n3. 动作说明具体清晰，可直接执行\n4. 有明确的渐进式强度提升策略\n5. 注意事项包含安全提醒和常见误区\n6. 计划整体有科学依据"
+    },
+    {
+      "id": "health-diet-1",
+      "domain": "个体健康",
+      "capability": "文本生成",
+      "prompt": "请为一位正在进行力量训练的成年人（体重75kg，目标增肌减脂）撰写一天的饮食方案示例，包括三餐和两次加餐。要求注明每餐的食物、大致分量和宏量营养素分配（蛋白质/碳水/脂肪）。",
+      "criteria": "1. 总热量和宏量营养素分配合理（蛋白质充足，约1.6-2.2g/kg体重）\n2. 食物选择实际可操作\n3. 每餐营养素标注清晰\n4. 加餐安排合理（训练前后营养补充）\n5. 整体方案符合运动营养学基本原则"
+    }
+  ]
+}
