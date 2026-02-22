@@ -4,6 +4,9 @@ on:
   issues:
     types: [labeled]
 
+permissions:
+  issues: write
+
 jobs:
   # Job 1: Extract runner label from the issue label
   extract-runner:
