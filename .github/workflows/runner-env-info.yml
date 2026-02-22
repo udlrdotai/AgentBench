@@ -76,14 +76,15 @@ jobs:
           git checkout -b "$BRANCH_NAME"
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Run claude agent
+      - name: Build prompt file
         env:
           ISSUE_NUMBER: ${{ needs.setup.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.setup.outputs.issue_title }}
           ISSUE_BODY: ${{ needs.setup.outputs.issue_body }}
           ISSUE_COMMENTS: ${{ needs.setup.outputs.issue_comments }}
         run: |
-          PROMPT="根据以下 GitHub Issue 的需求完成开发任务，直接修改代码文件。不要询问任何问题，直接完成任务。
+          cat > /tmp/agent-prompt.txt <<PROMPTEOF
+          根据以下 GitHub Issue 的需求完成开发任务，直接修改代码文件。不要询问任何问题，直接完成任务。
 
           Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
 
@@ -91,10 +92,21 @@ jobs:
           ${ISSUE_BODY}
 
           --- 相关评论 ---
-          ${ISSUE_COMMENTS}"
+          ${ISSUE_COMMENTS}
+          PROMPTEOF
+          echo "=== Prompt ==="
+          cat /tmp/agent-prompt.txt
 
+      - name: Run claude agent
+        run: |
+          echo "=== Working directory: $(pwd) ==="
+          echo "=== Claude version ==="
+          claude --version
           echo "=== Invoking Claude Agent ==="
-          echo "$PROMPT" | claude --dangerously-skip-permissions --verbose
+          claude -p --dangerously-skip-permissions "$(cat /tmp/agent-prompt.txt)"
+          echo "=== Agent finished ==="
+          echo "=== Files changed ==="
+          git status
 
       - name: Commit and push changes
         id: commit
