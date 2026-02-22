@@ -13,6 +13,7 @@ class EvalResult:
     task_id: str
     score: float
     comment: str
+    model_output: str = ""
 
 
 class BaseEvaluator(ABC):
