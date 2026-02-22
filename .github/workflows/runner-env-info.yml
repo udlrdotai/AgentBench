@@ -55,14 +55,11 @@ jobs:
             if (comments.length === 0) return '(no comments)';
             return comments.map(c => `[${c.user.login}]: ${c.body}`).join('\n\n');
 
-  # Job 2: Run agent on self-hosted runner
+  # Job 2: Run agent on self-hosted runner — Claude does everything including git and PR
   agent:
     needs: setup
     runs-on: ${{ needs.setup.outputs.runner_label }}
     timeout-minutes: 30
-    outputs:
-      has_changes: ${{ steps.commit.outputs.has_changes }}
-      branch_name: ${{ steps.branch.outputs.branch_name }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -70,97 +67,53 @@ jobs:
           fetch-depth: 0
 
       - name: Create feature branch
-        id: branch
         run: |
-          BRANCH_NAME="agent/issue-${{ needs.setup.outputs.issue_number }}"
-          git checkout -b "$BRANCH_NAME"
-          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+          git checkout -b "agent/issue-${{ needs.setup.outputs.issue_number }}"
 
-      - name: Build prompt file
+      - name: Build prompt and run claude agent
         env:
           ISSUE_NUMBER: ${{ needs.setup.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.setup.outputs.issue_title }}
           ISSUE_BODY: ${{ needs.setup.outputs.issue_body }}
           ISSUE_COMMENTS: ${{ needs.setup.outputs.issue_comments }}
+          REPO: ${{ github.repository }}
         run: |
+          BRANCH="agent/issue-${ISSUE_NUMBER}"
+
           cat > /tmp/agent-prompt.txt <<PROMPTEOF
-          根据以下 GitHub Issue 的需求完成开发任务，直接修改代码文件。不要询问任何问题，直接完成任务。
+          你是一个自动化开发 Agent。请根据以下 GitHub Issue 完成开发任务。
 
-          Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
+          ## Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
 
-          --- 需求描述 ---
+          ### 需求描述
           ${ISSUE_BODY}
 
-          --- 相关评论 ---
+          ### 相关评论
           ${ISSUE_COMMENTS}
-          PROMPTEOF
-          echo "=== Prompt ==="
-          cat /tmp/agent-prompt.txt
 
-      - name: Run claude agent
-        run: |
-          echo "=== Working directory: $(pwd) ==="
+          ## 你需要完成的步骤
+
+          1. 阅读项目代码，理解项目结构
+          2. 根据 Issue 需求修改或创建代码文件
+          3. 完成后，执行以下 git 命令提交并推送代码：
+             git add -A
+             git commit -m "feat: resolve issue #${ISSUE_NUMBER} - ${ISSUE_TITLE}"
+             git push origin ${BRANCH}
+          4. 然后执行以下命令创建 PR：
+             gh pr create --title "Agent: resolve issue #${ISSUE_NUMBER}" --base main --head ${BRANCH} --body "Automated PR by Claude Agent. Resolves #${ISSUE_NUMBER}"
+
+          重要：你必须在 session 内完成 git commit、git push 和 gh pr create，不要只修改文件就结束。
+          PROMPTEOF
+
           echo "=== Claude version ==="
           claude --version
           echo "=== Invoking Claude Agent ==="
           claude -p --dangerously-skip-permissions "$(cat /tmp/agent-prompt.txt)"
           echo "=== Agent finished ==="
-          echo "=== Files changed ==="
-          git status
 
-      - name: Commit and push changes
-        id: commit
-        run: |
-          if git diff --quiet && git diff --cached --quiet; then
-            echo "No changes detected."
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          git add -A
-          git commit -m "$(cat <<EOF
-          feat: resolve issue #${{ needs.setup.outputs.issue_number }}
-
-          Automated changes by Claude Agent for:
-          ${{ needs.setup.outputs.issue_title }}
-
-          Closes #${{ needs.setup.outputs.issue_number }}
-
-          Co-Authored-By: Claude <noreply@anthropic.com>
-          EOF
-          )"
-          git push origin "${{ steps.branch.outputs.branch_name }}"
-
-  # Job 3: Create PR (on GitHub-hosted runner)
-  create-pr:
-    needs: [setup, agent]
-    runs-on: ubuntu-latest
-    if: needs.agent.outputs.has_changes == 'true'
-    outputs:
-      pr_url: ${{ steps.pr.outputs.pr_url }}
-    steps:
-      - name: Create pull request
-        id: pr
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const issueNumber = ${{ needs.setup.outputs.issue_number }};
-            const branchName = '${{ needs.agent.outputs.branch_name }}';
-            const { data: pr } = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `Agent: resolve issue #${issueNumber}`,
-              head: branchName,
-              base: 'main',
-              body: `## Automated PR by Claude Agent\n\nResolves #${issueNumber}\n\nWorkflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-            });
-            core.setOutput('pr_url', pr.html_url);
-            console.log(`PR created: ${pr.html_url}`);
-
-  # Job 4: Notify result on issue
+  # Job 3: Notify result on issue
   notify:
-    needs: [setup, agent, create-pr]
+    needs: [setup, agent]
     runs-on: ubuntu-latest
     if: always() && needs.setup.result == 'success'
     steps:
@@ -169,23 +122,30 @@ jobs:
         with:
           script: |
             const agentStatus = '${{ needs.agent.result }}';
-            const hasChanges = '${{ needs.agent.outputs.has_changes }}' === 'true';
-            const prUrl = '${{ needs.create-pr.outputs.pr_url }}';
+            const issueNumber = ${{ needs.setup.outputs.issue_number }};
+            const branch = `agent/issue-${issueNumber}`;
 
             let body = '';
             if (agentStatus !== 'success') {
               body = `❌ Agent failed.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            } else if (!hasChanges) {
-              body = `⚠️ Agent completed but made no code changes.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            } else if (prUrl) {
-              body = `✅ Agent completed and created PR: ${prUrl}\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             } else {
-              body = `⚠️ Agent made changes but PR creation failed.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+              // Check if PR was created
+              const { data: prs } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head: `${context.repo.owner}:${branch}`,
+                state: 'open',
+              });
+              if (prs.length > 0) {
+                body = `✅ Agent completed and created PR: ${prs[0].html_url}\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+              } else {
+                body = `⚠️ Agent completed but no PR was created.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+              }
             }
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: ${{ needs.setup.outputs.issue_number }},
+              issue_number: issueNumber,
               body: body,
             });
