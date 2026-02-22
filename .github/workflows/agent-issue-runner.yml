@@ -61,7 +61,9 @@ jobs:
     runs-on: ${{ needs.setup.outputs.runner_label }}
     timeout-minutes: 30
     outputs:
+      agent_name: ${{ steps.version.outputs.agent_name }}
       agent_version: ${{ steps.version.outputs.agent_version }}
+      model_name: ${{ steps.version.outputs.model_name }}
       model_version: ${{ steps.version.outputs.model_version }}
     steps:
       - name: Checkout repository
@@ -69,14 +71,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get agent and model version
+      - name: Get agent and model info
         id: version
         run: |
+          AGENT_NAME="Claude Code"
           AGENT_VERSION=$(claude --version 2>&1 | head -1)
+          echo "agent_name=${AGENT_NAME}" >> "$GITHUB_OUTPUT"
           echo "agent_version=${AGENT_VERSION:-unknown}" >> "$GITHUB_OUTPUT"
 
-          MODEL_VERSION=$(claude config get model 2>/dev/null || echo "unknown")
-          echo "model_version=${MODEL_VERSION:-unknown}" >> "$GITHUB_OUTPUT"
+          MODEL_ID=$(claude config get model 2>/dev/null || echo "unknown")
+          # Extract model name from ID (e.g., "claude-sonnet-4-5-20250514" -> "Claude Sonnet 4.5")
+          MODEL_NAME=$(echo "$MODEL_ID" | sed -E 's/-[0-9]{8}$//' | sed 's/-/ /g' | sed -E 's/([0-9]+) ([0-9]+)/\1.\2/g' | sed 's/\b\(.\)/\u\1/g')
+          echo "model_name=${MODEL_NAME:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "model_version=${MODEL_ID:-unknown}" >> "$GITHUB_OUTPUT"
 
       - name: Create feature branch
         run: |
@@ -137,12 +144,14 @@ jobs:
             const agentStatus = '${{ needs.agent.result }}';
             const issueNumber = ${{ needs.setup.outputs.issue_number }};
             const branch = `agent/issue-${issueNumber}`;
+            const agentName = '${{ needs.agent.outputs.agent_name }}' || 'unknown';
             const agentVersion = '${{ needs.agent.outputs.agent_version }}' || 'unknown';
+            const modelName = '${{ needs.agent.outputs.model_name }}' || 'unknown';
             const modelVersion = '${{ needs.agent.outputs.model_version }}' || 'unknown';
 
-            // Create and add version labels to the issue
-            const agentLabel = `agent:${agentVersion}`;
-            const modelLabel = `model:${modelVersion}`;
+            // Create and add version labels to the issue (include name and version)
+            const agentLabel = `agent:${agentName} ${agentVersion}`;
+            const modelLabel = `model:${modelName} (${modelVersion})`;
 
             for (const labelInfo of [
               { name: agentLabel, color: '1d76db' },
@@ -171,8 +180,8 @@ jobs:
               labels: [agentLabel, modelLabel],
             });
 
-            // Build result comment with version info
-            const versionInfo = `Agent: \`${agentVersion}\` | Model: \`${modelVersion}\``;
+            // Build result comment with name and version info
+            const versionInfo = `Agent: \`${agentName} ${agentVersion}\` | Model: \`${modelName} (${modelVersion})\``;
             let body = '';
             if (agentStatus !== 'success') {
               body = `❌ Agent failed.\n\n${versionInfo}\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
