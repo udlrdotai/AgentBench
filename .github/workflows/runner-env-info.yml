@@ -8,12 +8,13 @@ permissions:
   issues: write
 
 jobs:
-  # Job 1: Parse the run-on label
+  # Job 1: Parse the run-on label and fetch issue comments
   setup:
     runs-on: ubuntu-latest
     if: startsWith(github.event.label.name, 'run-on:')
     outputs:
       runner_label: ${{ steps.parse.outputs.runner_label }}
+      issue_comments: ${{ steps.comments.outputs.comments }}
     steps:
       - name: Parse runner label
         id: parse
@@ -26,21 +27,38 @@ jobs:
           fi
           echo "runner_label=$RUNNER_LABEL" >> "$GITHUB_OUTPUT"
 
+      - name: Fetch issue comments
+        id: comments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const formatted = comments.length === 0
+              ? '(no comments)'
+              : comments.map(c => `[${c.user.login}] ${c.created_at}\n${c.body}`).join('\n\n');
+            core.setOutput('comments', formatted);
+
   # Job 2: Run on self-hosted runner
   run:
     needs: setup
     runs-on: ${{ needs.setup.outputs.runner_label }}
     timeout-minutes: 10
     steps:
-      - name: Claude tool version
+      - name: Tool version check
+        env:
+          TOOL_NAME: ${{ needs.setup.outputs.runner_label }}
         run: |
           echo "============================================"
-          echo "  CLAUDE TOOL VERSION"
+          echo "  TOOL VERSION: ${TOOL_NAME}"
           echo "============================================"
-          if command -v claude &>/dev/null; then
-            claude --version
+          if command -v "$TOOL_NAME" &>/dev/null; then
+            "$TOOL_NAME" --version 2>&1 || "$TOOL_NAME" version 2>&1 || echo "Installed but --version not supported"
           else
-            echo "claude CLI not found in PATH"
+            echo "${TOOL_NAME} not found in PATH"
             echo "PATH: $PATH"
           fi
 
@@ -50,12 +68,15 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ', ') }}
+          ISSUE_COMMENTS: ${{ needs.setup.outputs.issue_comments }}
         run: |
           echo "============================================"
-          echo "  ISSUE CONTENT"
+          echo "  ISSUE #${ISSUE_NUMBER}"
           echo "============================================"
-          echo "Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
-          echo "URL: ${ISSUE_URL}"
+          echo "Title:  ${ISSUE_TITLE}"
+          echo "URL:    ${ISSUE_URL}"
+          echo "Labels: ${ISSUE_LABELS}"
           echo ""
           echo "--- Body ---"
           if [ -n "$ISSUE_BODY" ]; then
@@ -63,6 +84,9 @@ jobs:
           else
             echo "(empty)"
           fi
+          echo ""
+          echo "--- Comments ---"
+          echo "$ISSUE_COMMENTS"
 
   # Job 3: Post result comment (on GitHub-hosted to avoid self-hosted network issues)
   notify:
