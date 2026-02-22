@@ -60,17 +60,29 @@ jobs:
     needs: setup
     runs-on: ${{ needs.setup.outputs.runner_label }}
     timeout-minutes: 30
+    outputs:
+      agent_version: ${{ steps.version.outputs.agent_version }}
+      model_version: ${{ steps.version.outputs.model_version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Get agent and model version
+        id: version
+        run: |
+          AGENT_VERSION=$(claude --version 2>&1 | head -1)
+          echo "agent_version=${AGENT_VERSION:-unknown}" >> "$GITHUB_OUTPUT"
+
+          MODEL_VERSION=$(claude config get model 2>/dev/null || echo "unknown")
+          echo "model_version=${MODEL_VERSION:-unknown}" >> "$GITHUB_OUTPUT"
+
       - name: Create feature branch
         run: |
           git checkout -b "agent/issue-${{ needs.setup.outputs.issue_number }}"
 
-      - name: Build prompt and run claude agent
+      - name: Run claude agent
         env:
           ISSUE_NUMBER: ${{ needs.setup.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.setup.outputs.issue_title }}
@@ -80,7 +92,7 @@ jobs:
         run: |
           BRANCH="agent/issue-${ISSUE_NUMBER}"
 
-          cat > /tmp/agent-prompt.txt <<PROMPTEOF
+          PROMPT=$(cat <<PROMPTEOF
           你是一个自动化开发 Agent。请根据以下 GitHub Issue 完成开发任务。
 
           ## Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
@@ -104,30 +116,66 @@ jobs:
 
           重要：你必须在 session 内完成 git commit、git push 和 gh pr create，不要只修改文件就结束。
           PROMPTEOF
+          )
 
           echo "=== Claude version ==="
           claude --version
           echo "=== Invoking Claude Agent ==="
-          claude -p --dangerously-skip-permissions "$(cat /tmp/agent-prompt.txt)"
+          claude -p --dangerously-skip-permissions "$PROMPT"
           echo "=== Agent finished ==="
 
-  # Job 3: Notify result on issue
+  # Job 3: Notify result on issue and add version labels
   notify:
     needs: [setup, agent]
     runs-on: ubuntu-latest
     if: always() && needs.setup.result == 'success'
     steps:
-      - name: Post result comment
+      - name: Post result comment and add version labels
         uses: actions/github-script@v7
         with:
           script: |
             const agentStatus = '${{ needs.agent.result }}';
             const issueNumber = ${{ needs.setup.outputs.issue_number }};
             const branch = `agent/issue-${issueNumber}`;
+            const agentVersion = '${{ needs.agent.outputs.agent_version }}' || 'unknown';
+            const modelVersion = '${{ needs.agent.outputs.model_version }}' || 'unknown';
 
+            // Create and add version labels to the issue
+            const agentLabel = `agent:${agentVersion}`;
+            const modelLabel = `model:${modelVersion}`;
+
+            for (const labelInfo of [
+              { name: agentLabel, color: '1d76db' },
+              { name: modelLabel, color: '0e8a16' },
+            ]) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: labelInfo.name,
+                });
+              } catch {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: labelInfo.name,
+                  color: labelInfo.color,
+                });
+              }
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: [agentLabel, modelLabel],
+            });
+
+            // Build result comment with version info
+            const versionInfo = `Agent: \`${agentVersion}\` | Model: \`${modelVersion}\``;
             let body = '';
             if (agentStatus !== 'success') {
-              body = `❌ Agent failed.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+              body = `❌ Agent failed.\n\n${versionInfo}\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             } else {
               // Check if PR was created
               const { data: prs } = await github.rest.pulls.list({
@@ -137,9 +185,9 @@ jobs:
                 state: 'open',
               });
               if (prs.length > 0) {
-                body = `✅ Agent completed and created PR: ${prs[0].html_url}\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+                body = `✅ Agent completed and created PR: ${prs[0].html_url}\n\n${versionInfo}\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
               } else {
-                body = `⚠️ Agent completed but no PR was created.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+                body = `⚠️ Agent completed but no PR was created.\n\n${versionInfo}\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
               }
             }
 
