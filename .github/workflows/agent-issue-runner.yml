@@ -149,7 +149,7 @@ jobs:
             if (comments.length === 0) return '(no comments)';
             return comments.map(c => `[${c.user.login}]: ${c.body}`).join('\n\n');
 
-  # Job 2: Run agent on self-hosted runner — Claude does everything including git and PR
+  # Job 2: Run agent on self-hosted runner — Claude writes code, workflow handles git and PR
   agent:
     needs: setup
     runs-on: ${{ needs.setup.outputs.runner_label }}
@@ -170,14 +170,7 @@ jobs:
           ISSUE_TITLE: ${{ needs.setup.outputs.issue_title }}
           ISSUE_BODY: ${{ needs.setup.outputs.issue_body }}
           ISSUE_COMMENTS: ${{ needs.setup.outputs.issue_comments }}
-          REPO: ${{ github.repository }}
         run: |
-          BRANCH="agent/issue-${ISSUE_NUMBER}"
-
-          # Capture agent tool version info
-          CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
-          echo "=== Claude version: ${CLAUDE_VERSION} ==="
-
           PROMPT=$(cat <<PROMPTEOF
           你是一个自动化开发 Agent。请根据以下 GitHub Issue 完成开发任务。
 
@@ -189,32 +182,41 @@ jobs:
           ### 相关评论
           ${ISSUE_COMMENTS}
 
-          ## Agent 信息
-          - Agent 工具: Claude Code ${CLAUDE_VERSION}
-          - Agent 模型: 由 Claude Code 当前配置决定（请在 commit 信息中使用你实际运行的模型名称和版本）
-
           ## 你需要完成的步骤
 
           1. 阅读项目代码，理解项目结构
           2. 根据 Issue 需求修改或创建代码文件
-          3. 完成后，执行以下 git 命令提交并推送代码（注意 commit 信息需包含 agent 工具和模型信息）：
-             git add -A
-             git commit -m "feat: resolve issue #${ISSUE_NUMBER} - ${ISSUE_TITLE}
 
-          Agent: Claude Code ${CLAUDE_VERSION}
-          Model: <your-model-name-and-version>"
-             git push origin ${BRANCH}
-          4. 然后执行以下命令创建 PR：
-             gh pr create --title "Agent: resolve issue #${ISSUE_NUMBER}" --base main --head ${BRANCH} --body "Automated PR by Claude Agent. Resolves #${ISSUE_NUMBER}"
-
-          重要：你必须在 session 内完成 git commit、git push 和 gh pr create，不要只修改文件就结束。
-          重要：在 git commit 信息中，请将 <your-model-name-and-version> 替换为你实际使用的模型名称和版本（例如 claude-opus-4-6）。
+          重要：你只需要完成代码的修改或创建，不需要执行 git 操作或创建 PR，这些由 workflow 自动完成。
           PROMPTEOF
           )
 
           echo "=== Invoking Claude Agent ==="
           claude -p --dangerously-skip-permissions "$PROMPT"
           echo "=== Agent finished ==="
+
+      - name: Commit changes
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 1
+          fi
+          git commit -m "feat: resolve issue #${{ needs.setup.outputs.issue_number }} - ${{ needs.setup.outputs.issue_title }}"
+
+      - name: Push branch
+        run: |
+          git push origin "agent/issue-${{ needs.setup.outputs.issue_number }}"
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --title "Agent: resolve issue #${{ needs.setup.outputs.issue_number }}" \
+            --base main \
+            --head "agent/issue-${{ needs.setup.outputs.issue_number }}" \
+            --body "Automated PR by Claude Agent. Resolves #${{ needs.setup.outputs.issue_number }}"
 
   # Job 3: Notify result on issue
   notify:
