@@ -8,6 +8,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  repository-projects: write
 
 jobs:
   # Job 1: Parse label and fetch issue content
@@ -41,6 +42,99 @@ jobs:
           ${{ github.event.issue.body }}
           BODYEOF
           echo "${EOF_MARKER}" >> "$GITHUB_OUTPUT"
+
+      - name: Update project item status to Ready
+        uses: actions/github-script@v7
+        env:
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN || github.token }}
+          script: |
+            const issueNodeId = context.payload.issue.node_id;
+
+            // Query project items associated with this issue
+            const itemsResult = await github.graphql(`
+              query($nodeId: ID!) {
+                node(id: $nodeId) {
+                  ... on Issue {
+                    projectItems(first: 10) {
+                      nodes {
+                        id
+                        project {
+                          id
+                          title
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { nodeId: issueNodeId });
+
+            const projectItems = itemsResult.node.projectItems.nodes;
+            if (projectItems.length === 0) {
+              console.log('No project items found for this issue, skipping status update.');
+              return;
+            }
+
+            for (const item of projectItems) {
+              // Get the Status field and its options for this project
+              const fieldResult = await github.graphql(`
+                query($projectId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options {
+                              id
+                              name
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `, { projectId: item.project.id });
+
+              const statusField = fieldResult.node.fields.nodes.find(f => f.name === 'Status');
+              if (!statusField) {
+                console.log(`No Status field found in project "${item.project.title}", skipping.`);
+                continue;
+              }
+
+              const readyOption = statusField.options.find(o => o.name === 'Ready');
+              if (!readyOption) {
+                console.log(`No "Ready" option found in Status field of project "${item.project.title}", skipping.`);
+                continue;
+              }
+
+              // Update the project item's Status to Ready
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $optionId }
+                  }) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `, {
+                projectId: item.project.id,
+                itemId: item.id,
+                fieldId: statusField.id,
+                optionId: readyOption.id,
+              });
+
+              console.log(`Updated status to "Ready" in project "${item.project.title}"`);
+            }
 
       - name: Fetch issue comments
         id: comments
