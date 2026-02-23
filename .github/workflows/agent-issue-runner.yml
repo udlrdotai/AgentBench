@@ -170,8 +170,12 @@ jobs:
           ISSUE_TITLE: ${{ needs.setup.outputs.issue_title }}
           ISSUE_BODY: ${{ needs.setup.outputs.issue_body }}
           ISSUE_COMMENTS: ${{ needs.setup.outputs.issue_comments }}
-          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'opus' }}
         run: |
+          # Capture agent tool version
+          CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
+          echo "=== Claude Code version: ${CLAUDE_VERSION} ==="
+          echo "$CLAUDE_VERSION" > .claude-agent-version
+
           PROMPT=$(cat <<PROMPTEOF
           你是一个自动化开发 Agent。请根据以下 GitHub Issue 完成开发任务。
 
@@ -187,19 +191,34 @@ jobs:
 
           1. 阅读项目代码，理解项目结构
           2. 根据 Issue 需求修改或创建代码文件
+          3. 在项目根目录创建文件 .claude-model-info，内容为你实际使用的模型名称和版本（例如 claude-opus-4-6），只写模型ID，不要写其他内容
 
-          重要：你只需要完成代码的修改或创建，不需要执行 git 操作或创建 PR，这些由 workflow 自动完成。
+          重要：你只需要完成代码的修改或创建以及写入模型信息文件，不需要执行 git 操作或创建 PR，这些由 workflow 自动完成。
           PROMPTEOF
           )
 
-          echo "=== Invoking Claude Agent (model: $CLAUDE_MODEL) ==="
-          claude -p --model "$CLAUDE_MODEL" --dangerously-skip-permissions "$PROMPT"
+          echo "=== Invoking Claude Agent ==="
+          claude -p --dangerously-skip-permissions "$PROMPT"
           echo "=== Agent finished ==="
 
-      - name: Commit changes
-        env:
-          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'opus' }}
+      - name: Collect agent info and commit changes
         run: |
+          # Read agent info
+          CLAUDE_VERSION="unknown"
+          if [ -f .claude-agent-version ]; then
+            CLAUDE_VERSION=$(cat .claude-agent-version)
+            rm .claude-agent-version
+          fi
+
+          CLAUDE_MODEL="unknown"
+          if [ -f .claude-model-info ]; then
+            CLAUDE_MODEL=$(cat .claude-model-info)
+            rm .claude-model-info
+          fi
+
+          echo "Agent: Claude Code ${CLAUDE_VERSION}"
+          echo "Model: ${CLAUDE_MODEL}"
+
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to commit"
@@ -207,8 +226,12 @@ jobs:
           fi
           git commit -m "feat: resolve issue #${{ needs.setup.outputs.issue_number }} - ${{ needs.setup.outputs.issue_title }}
 
-          Agent: Claude Code
-          Model: $CLAUDE_MODEL"
+          Agent: Claude Code ${CLAUDE_VERSION}
+          Model: ${CLAUDE_MODEL}"
+
+          # Save for later steps
+          echo "$CLAUDE_VERSION" > /tmp/claude-agent-version
+          echo "$CLAUDE_MODEL" > /tmp/claude-model-info
 
       - name: Push branch
         run: |
@@ -217,16 +240,18 @@ jobs:
       - name: Create Pull Request
         env:
           GH_TOKEN: ${{ github.token }}
-          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'opus' }}
         run: |
+          CLAUDE_VERSION=$(cat /tmp/claude-agent-version 2>/dev/null || echo "unknown")
+          CLAUDE_MODEL=$(cat /tmp/claude-model-info 2>/dev/null || echo "unknown")
+
           gh pr create \
             --title "Agent: resolve issue #${{ needs.setup.outputs.issue_number }}" \
             --base main \
             --head "agent/issue-${{ needs.setup.outputs.issue_number }}" \
             --body "Automated PR by Claude Agent. Resolves #${{ needs.setup.outputs.issue_number }}
 
-          **Agent:** Claude Code
-          **Model:** $CLAUDE_MODEL"
+          **Agent:** Claude Code ${CLAUDE_VERSION}
+          **Model:** ${CLAUDE_MODEL}"
 
   # Job 3: Notify result on issue
   notify:
