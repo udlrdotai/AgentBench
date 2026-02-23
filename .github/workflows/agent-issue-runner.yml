@@ -170,6 +170,7 @@ jobs:
           ISSUE_TITLE: ${{ needs.setup.outputs.issue_title }}
           ISSUE_BODY: ${{ needs.setup.outputs.issue_body }}
           ISSUE_COMMENTS: ${{ needs.setup.outputs.issue_comments }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'opus' }}
         run: |
           PROMPT=$(cat <<PROMPTEOF
           你是一个自动化开发 Agent。请根据以下 GitHub Issue 完成开发任务。
@@ -191,18 +192,23 @@ jobs:
           PROMPTEOF
           )
 
-          echo "=== Invoking Claude Agent ==="
-          claude -p --dangerously-skip-permissions "$PROMPT"
+          echo "=== Invoking Claude Agent (model: $CLAUDE_MODEL) ==="
+          claude -p --model "$CLAUDE_MODEL" --dangerously-skip-permissions "$PROMPT"
           echo "=== Agent finished ==="
 
       - name: Commit changes
+        env:
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'opus' }}
         run: |
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 1
           fi
-          git commit -m "feat: resolve issue #${{ needs.setup.outputs.issue_number }} - ${{ needs.setup.outputs.issue_title }}"
+          git commit -m "feat: resolve issue #${{ needs.setup.outputs.issue_number }} - ${{ needs.setup.outputs.issue_title }}
+
+          Agent: Claude Code
+          Model: $CLAUDE_MODEL"
 
       - name: Push branch
         run: |
@@ -211,12 +217,16 @@ jobs:
       - name: Create Pull Request
         env:
           GH_TOKEN: ${{ github.token }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'opus' }}
         run: |
           gh pr create \
             --title "Agent: resolve issue #${{ needs.setup.outputs.issue_number }}" \
             --base main \
             --head "agent/issue-${{ needs.setup.outputs.issue_number }}" \
-            --body "Automated PR by Claude Agent. Resolves #${{ needs.setup.outputs.issue_number }}"
+            --body "Automated PR by Claude Agent. Resolves #${{ needs.setup.outputs.issue_number }}
+
+          **Agent:** Claude Code
+          **Model:** $CLAUDE_MODEL"
 
   # Job 3: Notify result on issue
   notify:
