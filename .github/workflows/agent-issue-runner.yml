@@ -55,6 +55,44 @@ jobs:
             if (comments.length === 0) return '(no comments)';
             return comments.map(c => `[${c.user.login}]: ${c.body}`).join('\n\n');
 
+      - name: Set issue status to ready
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = context.issue.number;
+            const labelName = 'ready';
+
+            // Ensure the 'ready' label exists (create if not)
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+              });
+            } catch (e) {
+              if (e.status === 404) {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: labelName,
+                  color: '0e8a16',
+                  description: 'Issue is ready for agent processing',
+                });
+              } else {
+                throw e;
+              }
+            }
+
+            // Add the 'ready' label to the issue
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: [labelName],
+            });
+
+            console.log(`Added '${labelName}' label to issue #${issueNumber}`);
+
   # Job 2: Run agent on self-hosted runner — Claude does everything including git and PR
   agent:
     needs: setup
