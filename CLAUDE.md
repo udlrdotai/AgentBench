@@ -62,4 +62,5 @@ Benchmark tasks are in `benchmarks/*.json`:
 - Python 3.10+ with type hints (`|` union syntax, dataclasses)
 - API keys managed via `.env` file (loaded by `python-dotenv`); uses `OPENROUTER_API_KEY`; never commit `.env`
 - Git commit messages use conventional prefixes: `feat:`, `fix:`, `docs:`
-- Automated workflow: GitHub Issues with `run-on:<runner>` label trigger Claude agent via `.github/workflows/agent-issue-runner.yml`, which creates a branch `agent/issue-N`, commits, pushes, and opens a PR
+- Automated workflow (label trigger): GitHub Issues with `run-on:<runner>` label trigger Claude agent via `.github/workflows/agent-issue-runner.yml`, which creates a branch `agent/issue-N`, commits, pushes, and opens a PR
+- Automated workflow (comment trigger): Issue comment `/claude <task>` triggers Claude agent via `.github/workflows/agent-comment-runner.yml`, which creates a branch `agent/issue-N-<comment_id>`, commits, pushes, and opens a PR. Uses 👀 reaction = received, 🚀 reaction = completed (prevents re-processing)
