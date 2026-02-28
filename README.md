@@ -86,6 +86,85 @@ python run.py --models openai --judge openai/gpt-5.2
 | `--output` | `results/output.json` | 结果输出 JSON 文件路径 |
 | `--judge` | `openai/gpt-5.2` | LLM 评审使用的模型 ID |
 
+## ASMR 音频评测
+
+AgentBench 支持对 AI 音频生成模型进行 ASMR（自发性知觉经络反应）音频质量评测，帮助自媒体创作者、助眠内容制作者选择最适合的音频生成工具。
+
+### 环境配置
+
+在 `.env` 文件中添加对应模型的 API Key：
+
+```
+# OpenAI TTS
+OPENAI_API_KEY=sk-your-openai-api-key
+
+# Google Gemini TTS
+GOOGLE_API_KEY=your-google-api-key
+
+# MiniMax Music
+MINIMAX_API_KEY=your-minimax-api-key
+MINIMAX_GROUP_ID=your-minimax-group-id
+```
+
+### 运行 ASMR 音频评测
+
+```bash
+# 使用默认模型（openai-tts, gemini-tts, minimax-music）
+python run_audio.py
+
+# 指定模型
+python run_audio.py --models openai-tts,gemini-tts
+
+# 指定任务集和输出路径
+python run_audio.py --models openai-tts,gemini-tts --tasks benchmarks/asmr_audio.json --output-dir results/audio --output-json results/audio_results.json
+```
+
+### ASMR 评测 CLI 参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--models` | `openai-tts,gemini-tts,minimax-music` | 逗号分隔的音频模型名称 |
+| `--tasks` | `benchmarks/asmr_audio.json` | ASMR 音频基准测试 JSON 文件路径 |
+| `--output-dir` | `results/audio` | 生成的音频文件保存目录 |
+| `--output-json` | `results/audio_results.json` | 结果输出 JSON 文件路径 |
+
+### 支持的音频模型
+
+| 名称 | 说明 | API Key 环境变量 |
+|------|------|-----------------|
+| `openai-tts` | OpenAI 文本转语音模型 | `OPENAI_API_KEY` |
+| `gemini-tts` | Google Gemini 文本转语音模型 | `GOOGLE_API_KEY` |
+| `minimax-music` | MiniMax 海螺音乐生成模型 | `MINIMAX_API_KEY` + `MINIMAX_GROUP_ID` |
+
+### ASMR 评测维度
+
+评测覆盖 5 种 ASMR 音频类型：
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| **人声耳语型 (whisper)** | 轻柔耳语、低声细语 | 晚安耳语、呼吸声 |
+| **触发音效型 (trigger)** | 敲击、刮擦、翻页等物理触发音 | 指甲轻敲木头 |
+| **环境氛围型 (ambient)** | 雨声、篝火、森林等自然环境音 | 森林雨声 |
+| **角色扮演型 (roleplay)** | 模拟场景的人声+音效混合 | 图书管理员耳语 |
+| **音乐氛围型 (music)** | 极低 BPM 的轻柔背景音乐 | 60 BPM 助眠钢琴曲 |
+
+### 评测指标
+
+评测结果包含以下客观技术指标：
+
+| 指标 | 说明 |
+|------|------|
+| **duration_seconds** | 音频时长 |
+| **sample_rate** | 采样率 |
+| **snr_db** | 信噪比 |
+| **spectral_centroid_hz** | 频谱质心 |
+| **loudness_lufs** | 响度（LUFS） |
+| **peak_dbfs** | 峰值电平 |
+| **rms_dbfs** | 均方根电平 |
+| **spectral_rolloff_hz** | 频谱滚降点 |
+| **crest_factor_db** | 峰值因子 |
+| **low_freq_energy_ratio** | 低频能量比 |
+
 ## 工作原理
 
 1. 从 JSON 文件加载评测任务
