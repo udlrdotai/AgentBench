@@ -254,7 +254,7 @@ jobs:
 
           PROMPT=$(cat /tmp/agent-prompt.txt)
           echo "=== Invoking OpenCode Agent ==="
-          opencode run --quiet "$PROMPT"
+          opencode run "$PROMPT"
           echo "=== Agent finished ==="
 
       - name: Collect agent info and commit changes
