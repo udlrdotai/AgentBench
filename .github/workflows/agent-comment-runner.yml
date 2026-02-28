@@ -1,4 +1,4 @@
-name: Claude Agent (Comment Trigger)
+name: Agent (Comment Trigger)
 
 on:
   issue_comment:
@@ -10,15 +10,17 @@ permissions:
   issues: write
 
 jobs:
-  # Job 1: Validate /claude command, check completion status, parse inputs
+  # Job 1: Validate /claude or /opencode command, check completion status, parse inputs
   setup:
     runs-on: ubuntu-latest
-    # Only trigger on issue comments (not PR comments) starting with "/claude "
+    # Only trigger on issue comments (not PR comments) starting with "/claude " or "/opencode "
     if: >-
       !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/claude ')
+      (startsWith(github.event.comment.body, '/claude ') ||
+       startsWith(github.event.comment.body, '/opencode '))
     outputs:
       should_run: ${{ steps.guard.outputs.should_run }}
+      agent_type: ${{ steps.parse.outputs.agent_type }}
       issue_number: ${{ steps.parse.outputs.issue_number }}
       issue_title: ${{ steps.parse.outputs.issue_title }}
       issue_body: ${{ steps.parse.outputs.issue_body }}
@@ -62,23 +64,33 @@ jobs:
         with:
           script: |
             const body = context.payload.comment.body;
-            const taskPrompt = body.replace(/^\/claude\s+/, '').trim();
+            let agentType, taskPrompt;
+            if (body.startsWith('/claude ')) {
+              agentType = 'claude';
+              taskPrompt = body.replace(/^\/claude\s+/, '').trim();
+            } else if (body.startsWith('/opencode ')) {
+              agentType = 'opencode';
+              taskPrompt = body.replace(/^\/opencode\s+/, '').trim();
+            }
             if (!taskPrompt) {
-              core.setFailed('No task specified after /claude');
+              core.setFailed(`No task specified after /${agentType}`);
               return;
             }
+            core.setOutput('agent_type', agentType);
             core.setOutput('comment_id', context.payload.comment.id.toString());
             core.setOutput('issue_number', context.payload.issue.number.toString());
             core.setOutput('issue_title', context.payload.issue.title);
             core.setOutput('issue_body', context.payload.issue.body || '(no description)');
             core.setOutput('task_prompt', taskPrompt);
 
-  # Job 2: Run Claude agent on self-hosted runner
+  # Job 2: Run agent on self-hosted runner
   agent:
     needs: setup
     if: needs.setup.outputs.should_run == 'true'
     runs-on: self-hosted
     timeout-minutes: 30
+    env:
+      AGENT_TYPE: ${{ needs.setup.outputs.agent_type }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -89,18 +101,15 @@ jobs:
         run: |
           git checkout -b "agent/issue-${{ needs.setup.outputs.issue_number }}-${{ needs.setup.outputs.comment_id }}"
 
-      - name: Run claude agent
+      - name: Build prompt
+        id: prompt
         env:
           ISSUE_NUMBER: ${{ needs.setup.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.setup.outputs.issue_title }}
           ISSUE_BODY: ${{ needs.setup.outputs.issue_body }}
           TASK_PROMPT: ${{ needs.setup.outputs.task_prompt }}
         run: |
-          CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
-          echo "=== Claude Code version: ${CLAUDE_VERSION} ==="
-          echo "$CLAUDE_VERSION" > .claude-agent-version
-
-          PROMPT=$(cat <<PROMPTEOF
+          cat <<PROMPTEOF > /tmp/agent-prompt.txt
           你是一个自动化开发 Agent。请根据以下 GitHub Issue 和评论中的指令完成开发任务。
 
           ## Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
@@ -119,10 +128,29 @@ jobs:
 
           重要：你只需要完成代码的修改或创建以及写入模型信息文件，不需要执行 git 操作或创建 PR，这些由 workflow 自动完成。
           PROMPTEOF
-          )
 
+      - name: Run claude agent
+        if: env.AGENT_TYPE == 'claude'
+        run: |
+          AGENT_VERSION=$(claude --version 2>/dev/null || echo "unknown")
+          echo "=== Claude Code version: ${AGENT_VERSION} ==="
+          echo "$AGENT_VERSION" > .claude-agent-version
+
+          PROMPT=$(cat /tmp/agent-prompt.txt)
           echo "=== Invoking Claude Agent ==="
           claude -p --dangerously-skip-permissions "$PROMPT"
+          echo "=== Agent finished ==="
+
+      - name: Run opencode agent
+        if: env.AGENT_TYPE == 'opencode'
+        run: |
+          AGENT_VERSION=$(opencode --version 2>/dev/null || echo "unknown")
+          echo "=== OpenCode version: ${AGENT_VERSION} ==="
+          echo "$AGENT_VERSION" > .claude-agent-version
+
+          PROMPT=$(cat /tmp/agent-prompt.txt)
+          echo "=== Invoking OpenCode Agent ==="
+          opencode run --quiet "$PROMPT"
           echo "=== Agent finished ==="
 
       - name: Collect agent info and commit changes
@@ -130,20 +158,21 @@ jobs:
           ISSUE_NUMBER: ${{ needs.setup.outputs.issue_number }}
           ISSUE_TITLE: ${{ needs.setup.outputs.issue_title }}
         run: |
-          CLAUDE_VERSION="unknown"
+          AGENT_VERSION="unknown"
           if [ -f .claude-agent-version ]; then
-            CLAUDE_VERSION=$(cat .claude-agent-version)
+            AGENT_VERSION=$(cat .claude-agent-version)
             rm .claude-agent-version
           fi
 
-          CLAUDE_MODEL="unknown"
+          AGENT_MODEL="unknown"
           if [ -f .claude-model-info ]; then
-            CLAUDE_MODEL=$(cat .claude-model-info)
+            AGENT_MODEL=$(cat .claude-model-info)
             rm .claude-model-info
           fi
 
-          echo "Agent: Claude Code ${CLAUDE_VERSION}"
-          echo "Model: ${CLAUDE_MODEL}"
+          AGENT_LABEL="${AGENT_TYPE^} Code"
+          echo "Agent: ${AGENT_LABEL} ${AGENT_VERSION}"
+          echo "Model: ${AGENT_MODEL}"
 
           git add -A
           if git diff --cached --quiet; then
@@ -151,12 +180,12 @@ jobs:
             exit 1
           fi
 
-          printf 'feat: resolve issue #%s - %s\n\nAgent: Claude Code %s\nModel: %s\n' \
-            "$ISSUE_NUMBER" "$ISSUE_TITLE" "$CLAUDE_VERSION" "$CLAUDE_MODEL" > /tmp/commit-msg.txt
+          printf 'feat: resolve issue #%s - %s\n\nAgent: %s %s\nModel: %s\n' \
+            "$ISSUE_NUMBER" "$ISSUE_TITLE" "$AGENT_LABEL" "$AGENT_VERSION" "$AGENT_MODEL" > /tmp/commit-msg.txt
           git commit -F /tmp/commit-msg.txt
 
-          echo "$CLAUDE_VERSION" > /tmp/claude-agent-version
-          echo "$CLAUDE_MODEL" > /tmp/claude-model-info
+          echo "$AGENT_VERSION" > /tmp/agent-version
+          echo "$AGENT_MODEL" > /tmp/agent-model
 
       - name: Push branch
         run: |
@@ -169,11 +198,12 @@ jobs:
           ISSUE_NUMBER: ${{ needs.setup.outputs.issue_number }}
           COMMENT_ID: ${{ needs.setup.outputs.comment_id }}
         run: |
-          CLAUDE_VERSION=$(cat /tmp/claude-agent-version 2>/dev/null || echo "unknown")
-          CLAUDE_MODEL=$(cat /tmp/claude-model-info 2>/dev/null || echo "unknown")
+          AGENT_VERSION=$(cat /tmp/agent-version 2>/dev/null || echo "unknown")
+          AGENT_MODEL=$(cat /tmp/agent-model 2>/dev/null || echo "unknown")
+          AGENT_LABEL="${AGENT_TYPE^} Code"
 
-          printf 'Automated PR by Claude Agent. Resolves #%s\n\n**Task:** %s\n**Agent:** Claude Code %s\n**Model:** %s\n' \
-            "$ISSUE_NUMBER" "$TASK_PROMPT" "$CLAUDE_VERSION" "$CLAUDE_MODEL" > /tmp/pr-body.md
+          printf 'Automated PR by %s Agent. Resolves #%s\n\n**Task:** %s\n**Agent:** %s %s\n**Model:** %s\n' \
+            "$AGENT_LABEL" "$ISSUE_NUMBER" "$TASK_PROMPT" "$AGENT_LABEL" "$AGENT_VERSION" "$AGENT_MODEL" > /tmp/pr-body.md
 
           gh pr create \
             --title "Agent: resolve issue #${ISSUE_NUMBER}" \

@@ -203,7 +203,7 @@ agentbench/
 ## 6. 分阶段实施建议
 
 ### Phase 1：最小可行评测（MVP）
-- 选择 3 个有公开 API 的模型（如 ElevenLabs SFX、OpenAI TTS、Stable Audio）
+- 选择 3 个有公开 API 的模型（Gemini TTS、OpenAI TTS、MiniMax Music）
 - 编写 5 个代表性 ASMR prompt（每种类型 1 个）
 - 实现客观指标自动评测（频谱、响度、SNR）
 - 人工盲听打分（3-5 位评审）
