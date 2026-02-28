@@ -1,0 +1,51 @@
+{
+  "name": "asmr_audio",
+  "description": "ASMR 音频生成评测 —— 覆盖耳语、触发音效、环境氛围、角色扮演、音乐氛围五种 ASMR 类型",
+  "tasks": [
+    {
+      "id": "asmr-whisper-1",
+      "domain": "ASMR音频",
+      "capability": "人声耳语生成",
+      "asmr_type": "whisper",
+      "expected_duration": 15.0,
+      "prompt": "Generate a soft whisper voice saying goodnight, with gentle breathing sounds between phrases. The voice should be calm, intimate, and soothing, as if speaking directly into the listener's ear. Include natural pauses and very soft lip sounds.",
+      "criteria": "1. 音频中包含清晰的耳语人声\n2. 语速缓慢、语调轻柔\n3. 包含自然的呼吸声和停顿\n4. 整体音量低且稳定，无突然的音量跳变\n5. 声音自然，无明显的机器合成痕迹\n6. 频谱以中低频为主，高频柔和"
+    },
+    {
+      "id": "asmr-trigger-1",
+      "domain": "ASMR音频",
+      "capability": "触发音效生成",
+      "asmr_type": "trigger",
+      "expected_duration": 15.0,
+      "prompt": "Generate the sound of fingernails gently tapping on a wooden surface, slow and rhythmic, with about 2 seconds between each tap. The tapping should be soft and precise, creating a satisfying ASMR trigger sound. Include subtle wood resonance after each tap.",
+      "criteria": "1. 敲击声清晰、节奏规律\n2. 每次敲击间隔约2秒\n3. 敲击力度轻柔，不刺耳\n4. 能听出木质表面的共鸣\n5. 背景安静，无杂音干扰\n6. 音频频谱符合物理敲击的自然特征"
+    },
+    {
+      "id": "asmr-ambient-1",
+      "domain": "ASMR音频",
+      "capability": "环境氛围生成",
+      "asmr_type": "ambient",
+      "expected_duration": 15.0,
+      "prompt": "Generate a gentle rain falling on leaves in a quiet forest, with occasional distant soft thunder rumbles. The rain should be light and steady, creating a peaceful atmosphere. Include subtle sounds of water drops falling from leaves.",
+      "criteria": "1. 雨声自然、持续、稳定\n2. 能区分出不同层次的雨声（雨落树叶、水滴声等）\n3. 远处雷声适度，不突兀\n4. 整体氛围宁静放松\n5. 无人工循环感或明显的音频拼接痕迹\n6. 频谱分布自然，低频稳定"
+    },
+    {
+      "id": "asmr-roleplay-1",
+      "domain": "ASMR音频",
+      "capability": "角色扮演生成",
+      "asmr_type": "roleplay",
+      "expected_duration": 15.0,
+      "prompt": "Generate a librarian whispering 'Let me find that book for you' while slowly turning pages of an old book. Include the soft rustling of pages, the whispered voice, and the quiet ambient sound of a library. The pace should be very slow and calming.",
+      "criteria": "1. 包含耳语人声和翻书音效两种声音元素\n2. 人声与音效自然融合，有空间感\n3. 翻书声真实自然\n4. 人声符合图书管理员角色（轻柔、低沉）\n5. 整体节奏缓慢、令人放松\n6. 图书馆安静氛围感营造得当"
+    },
+    {
+      "id": "asmr-music-1",
+      "domain": "ASMR音频",
+      "capability": "音乐氛围生成",
+      "asmr_type": "music",
+      "expected_duration": 15.0,
+      "prompt": "Generate ultra-calming ambient music at approximately 60 BPM with soft piano notes and subtle wind sounds in the background. The music should be minimalistic, with long sustain on each note, gentle reverb, and a dreamy, sleep-inducing quality.",
+      "criteria": "1. 音乐节奏缓慢（约60 BPM）\n2. 钢琴音色柔和、有混响\n3. 背景风声自然融入\n4. 极简编曲，不过于复杂\n5. 整体氛围梦幻、助眠\n6. 音量动态变化平缓，无突然的响度跳变"
+    }
+  ]
+}
