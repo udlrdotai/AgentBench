@@ -83,6 +83,110 @@ jobs:
             core.setOutput('issue_body', context.payload.issue.body || '(no description)');
             core.setOutput('task_prompt', taskPrompt);
 
+      - name: Update project item status to Ready
+        if: steps.guard.outputs.should_run == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = context.payload.issue.number;
+
+            // Step 1: Query issue's associated project items
+            const issueResult = await github.graphql(`
+              query($owner: String!, $repo: String!, $issueNumber: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $issueNumber) {
+                    projectItems(first: 20) {
+                      nodes {
+                        id
+                        project {
+                          id
+                          number
+                          title
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `, { owner, repo, issueNumber });
+
+            const projectItems = issueResult.repository.issue.projectItems.nodes;
+            if (projectItems.length === 0) {
+              core.info('Issue has no associated project items. Skipping status update.');
+              return;
+            }
+
+            core.info(`Found ${projectItems.length} project item(s) on issue #${issueNumber}`);
+
+            // Step 2: Update each project item's status to "Ready"
+            for (const item of projectItems) {
+              const projectId = item.project.id;
+              const itemId = item.id;
+              core.info(`Processing project: "${item.project.title}" (number: ${item.project.number})`);
+
+              // Get Status field and "Ready" option
+              const fieldsResult = await github.graphql(`
+                query($projectId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      fields(first: 20) {
+                        nodes {
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options {
+                              id
+                              name
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `, { projectId });
+
+              const statusField = fieldsResult.node.fields.nodes.find(f => f.name === 'Status');
+              if (!statusField) {
+                core.warning(`No "Status" field found in project "${item.project.title}". Skipping.`);
+                continue;
+              }
+
+              const readyOption = statusField.options.find(o => o.name === 'Ready');
+              if (!readyOption) {
+                core.warning(
+                  `No "Ready" option in Status field. Available: ${statusField.options.map(o => o.name).join(', ')}`
+                );
+                continue;
+              }
+
+              // Update status
+              await github.graphql(`
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $projectId
+                    itemId: $itemId
+                    fieldId: $fieldId
+                    value: { singleSelectOptionId: $optionId }
+                  }) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `, {
+                projectId,
+                itemId,
+                fieldId: statusField.id,
+                optionId: readyOption.id,
+              });
+
+              core.info(`Updated status to "Ready" in project "${item.project.title}"`);
+            }
+
   # Job 2: Run agent on self-hosted runner
   agent:
     needs: setup
