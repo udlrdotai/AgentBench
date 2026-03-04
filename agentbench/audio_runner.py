@@ -65,13 +65,30 @@ def run_audio_benchmark(
         model_output_dir = output_base / model.name.replace("/", "_")
 
         for task in tasks:
-            print(f"\n  Task {task.id} ({task.asmr_type}): generating audio...", end=" ", flush=True)
+            print(f"\n  Task {task.id} ({task.asmr_type}): ", end="", flush=True)
+
+            # Skip tasks incompatible with this model
+            if task.asmr_type and task.asmr_type not in model.supported_asmr_types:
+                print(f"SKIP (model does not support '{task.asmr_type}' type)")
+                model_results.append(
+                    AudioEvalResult(
+                        task_id=task.id,
+                        model_name=model.name,
+                        metrics=None,  # type: ignore[arg-type]
+                        technical_score=0.0,
+                        comment=f"Skipped: model does not support '{task.asmr_type}' asmr_type",
+                    )
+                )
+                continue
+
+            print("generating audio...", end=" ", flush=True)
 
             try:
                 audio_result = model.generate_audio(
                     prompt=task.prompt,
                     output_dir=model_output_dir,
                     task_id=task.id,
+                    asmr_type=task.asmr_type,
                 )
                 print(
                     f"OK ({audio_result.duration_seconds:.1f}s, "

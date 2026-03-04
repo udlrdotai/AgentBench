@@ -24,12 +24,14 @@ class OpenAITTSModel(AudioModel):
     Limited capability for: trigger sounds, environmental ambience, music.
     """
 
+    supported_asmr_types = {"whisper", "roleplay"}
+
     def __init__(self, api_key: str | None = None, voice: str = "alloy"):
         super().__init__("gpt-4o-mini-tts")
         self._client = openai.OpenAI(api_key=api_key)
         self._voice = voice
 
-    def generate_audio(self, prompt: str, output_dir: Path, task_id: str = "") -> AudioResult:
+    def generate_audio(self, prompt: str, output_dir: Path, task_id: str = "", asmr_type: str = "") -> AudioResult:
         output_dir.mkdir(parents=True, exist_ok=True)
         file_name = f"openai_tts_{task_id or uuid.uuid4().hex[:8]}.wav"
         file_path = output_dir / file_name
