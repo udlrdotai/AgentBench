@@ -202,18 +202,48 @@ agentbench/
 
 ## 6. 分阶段实施建议
 
-### Phase 1：最小可行评测（MVP）
+### Phase 1：最小可行评测（MVP）✅ 已完成
 - 选择 3 个有公开 API 的模型（Gemini TTS、OpenAI TTS、MiniMax Music）
 - 编写 5 个代表性 ASMR prompt（每种类型 1 个）
 - 实现客观指标自动评测（频谱、响度、SNR）
 - 人工盲听打分（3-5 位评审）
 - 输出简单对比表
 
-### Phase 2：扩展评测
+**Phase 1 实现说明：模型能力与任务类型匹配**
+
+Phase 1 实测发现，不同类型的音频模型仅能覆盖部分 ASMR 任务类型。TTS 模型本质上是语音合成引擎，无法生成非语音内容（音效、环境音、音乐）；音乐生成模型则无法生成人声耳语。因此代码层面通过 `supported_asmr_types` 机制声明每个模型的能力范围，runner 自动跳过不兼容的任务：
+
+| 模型 | 类型 | 支持的 asmr_type | 不支持的 asmr_type |
+|------|------|-----------------|-------------------|
+| OpenAI gpt-4o-mini-tts | TTS | `whisper`, `roleplay` | `trigger`, `ambient`, `music` |
+| Google Gemini 2.5 Flash TTS | TTS | `whisper`, `roleplay` | `trigger`, `ambient`, `music` |
+| MiniMax Music 2.5 | 音乐生成 | `ambient`, `music` | `whisper`, `trigger`, `roleplay` |
+
+当前 **`trigger`（触发音效）类型没有任何已接入的模型能覆盖**。
+
+### Phase 2：扩展评测 — 补齐 trigger 类型覆盖
 - 扩展到 6-8 个模型
 - ASMR prompt 增加到 15-20 个
 - 引入多模态 LLM 辅助评测内容匹配度
 - 建立 ASMR 评测的标准流程和评分体系
+
+**Phase 2 推荐接入的音效生成模型（补齐 trigger / ambient 覆盖）：**
+
+| 模型 | 能力 | 预期覆盖 asmr_type | 接入难度 |
+|------|------|-------------------|---------|
+| **ElevenLabs Sound Effects V2** | 文本→音效，最长 30s，48kHz WAV，支持循环 | `trigger`, `ambient` | 低（官方 Python SDK `elevenlabs`） |
+| **Stability AI Stable Audio 2.5** | 文本→音效/音乐，开放权重 | `trigger`, `ambient`, `music` | 中（REST API） |
+| **Meta AudioCraft (AudioGen)** | 开源音效生成 | `trigger`, `ambient` | 高（需自部署） |
+
+接入后各 asmr_type 的模型覆盖将变为：
+
+| asmr_type | Phase 1 模型 | Phase 2 新增模型 |
+|-----------|-------------|-----------------|
+| `whisper` | OpenAI TTS, Gemini TTS | ElevenLabs TTS（可选） |
+| `trigger` | ❌ 无 | **ElevenLabs SFX**, Stable Audio |
+| `ambient` | MiniMax Music | **ElevenLabs SFX**, Stable Audio |
+| `roleplay` | OpenAI TTS, Gemini TTS | — |
+| `music` | MiniMax Music | Stable Audio |
 
 ### Phase 3：自动化评测
 - 完善音频评测器的自动化流程

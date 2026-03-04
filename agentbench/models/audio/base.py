@@ -22,17 +22,21 @@ class AudioResult:
 class AudioModel(ABC):
     """Base class that all audio model adapters must implement."""
 
+    # Subclasses should override to declare which ASMR types they can handle.
+    supported_asmr_types: set[str] = {"whisper", "trigger", "ambient", "roleplay", "music"}
+
     def __init__(self, model_id: str):
         self.model_id = model_id
 
     @abstractmethod
-    def generate_audio(self, prompt: str, output_dir: Path, task_id: str = "") -> AudioResult:
+    def generate_audio(self, prompt: str, output_dir: Path, task_id: str = "", asmr_type: str = "") -> AudioResult:
         """Generate audio from a text prompt.
 
         Args:
             prompt: The text description for audio generation.
             output_dir: Directory to save the generated audio file.
             task_id: Optional task identifier for file naming.
+            asmr_type: ASMR category (whisper, trigger, ambient, roleplay, music).
 
         Returns:
             AudioResult with file path and metadata.
